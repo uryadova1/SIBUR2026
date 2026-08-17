@@ -40,31 +40,10 @@ from vtk_backend import generate_all_stl, build_main_body_polydata, check_manifo
 # from step_backend import generate_all_step
 
 
-# def build_arg_parser() -> argparse.ArgumentParser:
-#     ap = argparse.ArgumentParser(
-#         description="Генератор геометрии Т-образного микрофлюидного реактора (STL + STEP)"
-#     )
-#     ap.add_argument("--L1", type=float, default=10.0, help="Длина левого плеча главного канала, мм (по умолчанию 10)")
-#     ap.add_argument("--L2", type=float, default=8.0, help="Длина бокового канала, мм (по умолчанию 8)")
-#     ap.add_argument("--L3", type=float, default=30.0, help="Длина правого плеча главного канала, мм (по умолчанию 30)")
-#     ap.add_argument("--w", type=float, default=0.2, help="Ширина главного канала, мм (по умолчанию 0.2 = 200 мкм)")
-#     ap.add_argument("--wd", type=float, default=0.1, help="Ширина бокового канала, мм (по умолчанию 0.1 = 100 мкм)")
-#     ap.add_argument("--h", type=float, default=0.1, help="Высота (глубина) канала, мм (по умолчанию 0.1 = 100 мкм)")
-#     ap.add_argument("--cap-thickness", type=float, default=0.3, help="Толщина крышек портов, мм (по умолчанию 0.3)")
-#     ap.add_argument("--outdir", type=str, default="reactor_output", help="Папка для выходных файлов")
-#     ap.add_argument("--stl-only", action="store_true", help="Сгенерировать только STL (пропустить STEP)")
-#     ap.add_argument("--step-only", action="store_true", help="Сгенерировать только STEP (пропустить STL)")
-#     return ap
-
-
-def build_arg_parser() -> configargparse.ArgumentParser:
-    ap = configargparse.ArgumentParser(
-        description="Генератор геометрии Т-образного микрофлюидного реактора (STL + STEP)",
-        default_config_files=[]  # можно указать файл по умолчанию, если хотите
+def build_arg_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        description="Генератор геометрии Т-образного микрофлюидного реактора (STL + STEP)"
     )
-    # Добавляем аргумент для указания конфигурационного файла
-    ap.add_argument('--config', is_config_file=True, help='Путь к файлу конфигурации (JSON/YAML/INI)')
-
     ap.add_argument("--L1", type=float, default=10.0, help="Длина левого плеча главного канала, мм (по умолчанию 10)")
     ap.add_argument("--L2", type=float, default=8.0, help="Длина бокового канала, мм (по умолчанию 8)")
     ap.add_argument("--L3", type=float, default=30.0, help="Длина правого плеча главного канала, мм (по умолчанию 30)")
@@ -75,8 +54,9 @@ def build_arg_parser() -> configargparse.ArgumentParser:
     ap.add_argument("--outdir", type=str, default="reactor_output", help="Папка для выходных файлов")
     ap.add_argument("--stl-only", action="store_true", help="Сгенерировать только STL (пропустить STEP)")
     ap.add_argument("--step-only", action="store_true", help="Сгенерировать только STEP (пропустить STL)")
-
     return ap
+
+
 
 def main(argv=None) -> int:
     args = build_arg_parser().parse_args(argv)
