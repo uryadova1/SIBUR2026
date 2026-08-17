@@ -21,7 +21,7 @@ from typing import Dict, List, Tuple
 
 import vtk
 
-from geometry_core import (
+from .geometry_core import (
     TReactorParams,
     BoxSpec,
     t_shape_outline,

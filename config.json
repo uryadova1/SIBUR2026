@@ -1,0 +1,11 @@
+{
+  "reactor": "T",
+  "L1": 12.0,
+  "L2": 10.0,
+  "L3": 25.0,
+  "w": 0.25,
+  "wd": 0.15,
+  "h": 0.12,
+  "cap_thickness": 0.3,
+  "outdir": "stl\\t_reactor\\try"
+}
