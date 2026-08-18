@@ -5,8 +5,9 @@ import json
 import os
 import sys
 
-from t_reactor.geometry_core import TReactorParams
+from t_reactor.geometry_core import TReactorParams, bounding_box
 from t_reactor.vtk_backend import generate_all_stl, build_main_body_polydata, check_manifold
+# from t_reactor.step_backend import generate_all_step
 
 
 
@@ -61,8 +62,7 @@ def main(argv=None) -> int:
         w=params['w'],
         wd=params['wd'],
         h=params['h'],
-        cap_thickness=params['cap_thickness'],
-    )
+          )
 
     outdir = params['outdir']
 
@@ -87,6 +87,14 @@ def main(argv=None) -> int:
     for name, path in stl_paths.items():
         print(f"  {name}: {path}")
     results["stl"] = stl_paths
+
+    # step_paths = generate_all_step(reactor_params, outdir_path)
+    # for name, path in step_paths.items():
+    #     print(f"  {name}: {path}")
+    # results["step"] = step_paths
+    #
+    #
+    # bbox = bounding_box(reactor_params)
 
     return 0
 

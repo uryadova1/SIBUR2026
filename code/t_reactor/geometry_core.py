@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+
+from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
 # Прямоугольный параллелепипед, заданный диапазонами координат (мм)
@@ -7,7 +8,11 @@ BoxSpec = Tuple[float, float, float, float, float, float]  # xmin,xmax,ymin,ymax
 
 @dataclass
 class TReactorParams:
+    """Параметры Т-образного реактора (все размеры в мм).
 
+    Соответствие обозначениям на чертеже (в скобках — значение
+    на чертеже в мкм/мм, для справки):
+    """
     L1: float = 10.0     # длина левого плеча главного канала, мм
     L2: float = 8.0      # длина бокового (дозирующего) канала, мм
     L3: float = 30.0     # длина правого плеча главного канала, мм
@@ -15,15 +20,13 @@ class TReactorParams:
     wd: float = 0.1       # ширина бокового канала, мм (100 мкм)
     h: float = 0.1        # высота (глубина) канала, мм (100 мкм)
 
-    # Технологические параметры инструмента (не с чертежа):
-    cap_thickness: float = 0.3   # толщина "крышек" портов, мм
-    # доля перекрытия бокового канала с главным (для чистого
-    # булева объединения без "щели"); не влияет на итоговую длину
-    # L2, т.к. отсчитывается уже ВНУТРИ главного канала.
+    # Технологический параметр инструмента (не с чертежа): доля
+    # перекрытия бокового канала с главным; не влияет на итоговую
+    # длину L2, т.к. отсчитывается уже ВНУТРИ главного канала.
     junction_overlap: float = 0.0
 
     def __post_init__(self):
-        for name in ("L1", "L2", "L3", "w", "wd", "h", "cap_thickness"):
+        for name in ("L1", "L2", "L3", "w", "wd", "h"):
             if getattr(self, name) <= 0:
                 raise ValueError(f"Параметр {name} должен быть положительным")
         if self.wd > self.w:
@@ -78,7 +81,7 @@ def main_body_wall_rects(p: TReactorParams) -> List[List[Tuple[float, float, flo
     """Прямоугольные стенки основного тела (боковые "вертикальные"
     грани призмы), КРОМЕ трёх портовых торцов -- те остаются
     открытыми (сквозными отверстиями), чтобы их отдельно закрывали
-    "крышки" (см. cap_boxes). Крышки + эти стенки + верх/низ вместе
+    "крышки" (см. cap_rects). Крышки + эти стенки + верх/низ вместе
     образуют полностью замкнутый объём.
 
     Каждая стенка возвращается как список из 4 вершин (x,y,z) в
@@ -135,53 +138,58 @@ def port_specs(p: TReactorParams) -> Dict[str, dict]:
     }
 
 
-def cap_boxes(p: TReactorParams) -> Dict[str, BoxSpec]:
-    """Боксы трёх "крышек" портов.
+def cap_rects(p: TReactorParams) -> Dict[str, List[Tuple[float, float, float]]]:
+    """Плоские (нулевой толщины) прямоугольники трёх "крышек" портов.
 
-    Каждая крышка -- тонкая пластина толщиной cap_thickness,
-    вплотную примыкающая своей внутренней гранью к соответствующему
-    торцу канала и точно повторяющая его поперечное сечение
-    (w x h для главного канала, wd x h для бокового).
-    Такое разбиение удобно для последующей триангуляции CFD-сетки:
-    основное тело задаёт стенки (wall), а три отдельные крышки можно
-    использовать как отдельные патчи inlet_1/inlet_2/outlet, либо как
-    самостоятельные физические детали (переходники под трубки/фитинги).
+    Каждая крышка -- это ПЛОСКАЯ грань, лежащая ровно в плоскости
+    соответствующего торца канала (не отдельная пластина со
+    смещением/толщиной) и в точности повторяющая его поперечное
+    сечение (w x h для главного канала, wd x h для бокового).
+
+    Возвращает для каждого порта список из 4 вершин (x,y,z) в порядке
+    обхода (без учёта ориентации/нормали -- она выставляется в
+    бэкенде отдельно, по нормали порта).
     """
     ports = port_specs(p)
-    boxes: Dict[str, BoxSpec] = {}
+    rects: Dict[str, List[Tuple[float, float, float]]] = {}
     for name, spec in ports.items():
         axis = spec["axis"]
-        sign = spec["sign"]
         coord = spec["coord"]
         u0, u1 = spec["u_range"]
         v0, v1 = spec["v_range"]
 
-        if sign < 0:
-            along = (coord - p.cap_thickness, coord)
-        else:
-            along = (coord, coord + p.cap_thickness)
-
-        if axis == 0:      # нормаль по X -> сечение в Y,Z
-            box = (along[0], along[1], u0, u1, v0, v1)
-        elif axis == 1:    # нормаль по Y -> сечение в X,Z
-            box = (u0, u1, along[0], along[1], v0, v1)
-        else:               # нормаль по Z -> сечение в X,Y (не используется здесь)
-            box = (u0, u1, v0, v1, along[0], along[1])
-        boxes[name] = box
-    return boxes
+        if axis == 0:      # нормаль по X -> плоскость грани в Y,Z при X=coord
+            rects[name] = [
+                (coord, u0, v0),
+                (coord, u1, v0),
+                (coord, u1, v1),
+                (coord, u0, v1),
+            ]
+        elif axis == 1:    # нормаль по Y -> плоскость грани в X,Z при Y=coord
+            rects[name] = [
+                (u0, coord, v0),
+                (u1, coord, v0),
+                (u1, coord, v1),
+                (u0, coord, v1),
+            ]
+        else:               # нормаль по Z (не используется в этой модели)
+            rects[name] = [
+                (u0, v0, coord),
+                (u1, v0, coord),
+                (u1, v1, coord),
+                (u0, v1, coord),
+            ]
+    return rects
 
 
 def bounding_box(p: TReactorParams) -> BoxSpec:
-    """Габаритный параллелепипед всей сборки (тело + крышки), мм."""
+    """Габаритный параллелепипед всей сборки (тело + крышки), мм.
+
+    Крышки теперь плоские (нулевой толщины) и лежат ровно в плоскости
+    портов основного тела, поэтому габариты сборки совпадают с
+    габаритами самого тела.
+    """
     outline = t_shape_outline(p)
-    all_boxes: List[BoxSpec] = [
-        (min(x for x, _ in outline), max(x for x, _ in outline),
-         min(y for _, y in outline), max(y for _, y in outline),
-         0.0, p.h)
-    ] + list(cap_boxes(p).values())
-    xs = [c for b in all_boxes for c in (b[0], b[1])]
-    ys = [c for b in all_boxes for c in (b[2], b[3])]
-    zs = [c for b in all_boxes for c in (b[4], b[5])]
-    return (min(xs), max(xs), min(ys), max(ys), min(zs), max(zs))
-
-
+    xs = [x for x, _ in outline]
+    ys = [y for _, y in outline]
+    return (min(xs), max(xs), min(ys), max(ys), 0.0, p.h)

@@ -1,21 +1,3 @@
-"""
-vtk_backend.py
-===============
-
-Построение полигональной (STL) геометрии реактора средствами VTK.
-
-Основное тело канала строится НЕ через 3D булеву операцию над
-боксами (vtkBooleanOperationPolyDataFilter для тонких боксов с
-совпадающими по Z гранями оказался численно неустойчив и давал
-"дыры" не в тех местах), а как линейное выдавливание (extrusion)
-плоского Т-образного контура на высоту h -- поскольку высота канала
-одинакова везде, всё тело является простой призмой, и такой подход
-даёт гарантированно замкнутую (watertight) геометрию.
-Крышки портов экспортируются как отдельные боксы (без объединения
-с телом — они физически отдельные детали, примыкающие к телу
-вплотную).
-"""
-
 import os
 from typing import Dict, List, Tuple
 
@@ -23,33 +5,15 @@ import vtk
 
 from .geometry_core import (
     TReactorParams,
-    BoxSpec,
     t_shape_outline,
     main_body_wall_rects,
-    cap_boxes,
+    port_specs,
+    cap_rects,
 )
 
 
-def _cube_polydata(box: BoxSpec) -> vtk.vtkPolyData:
-    xmin, xmax, ymin, ymax, zmin, zmax = box
-    src = vtk.vtkCubeSource()
-    src.SetBounds(xmin, xmax, ymin, ymax, zmin, zmax)
-    src.Update()
-
-    tri = vtk.vtkTriangleFilter()
-    tri.SetInputData(src.GetOutput())
-    tri.Update()
-
-    clean = vtk.vtkCleanPolyData()
-    clean.SetInputData(tri.GetOutput())
-    clean.Update()
-    out = vtk.vtkPolyData()
-    out.DeepCopy(clean.GetOutput())
-    return out
-
-
 def _polygon_cell(points_3d: List[Tuple[float, float, float]],
-                   desired_normal: Tuple[float, float, float]) -> vtk.vtkPolyData:
+                  desired_normal: Tuple[float, float, float]) -> vtk.vtkPolyData:
     """Строит один плоский полигон (грань) по списку вершин, автоматически
     подбирая порядок обхода так, чтобы нормаль грани совпадала по
     направлению с desired_normal (наружу тела).
@@ -154,9 +118,31 @@ def build_main_body_polydata(p: TReactorParams) -> vtk.vtkPolyData:
 
 
 def build_cap_polydata(p: TReactorParams) -> Dict[str, vtk.vtkPolyData]:
-    """Строит полигональные тела трёх крышек портов."""
-    boxes = cap_boxes(p)
-    return {name: _cube_polydata(box) for name, box in boxes.items()}
+    """Строит плоские (нулевой толщины) грани трёх крышек портов.
+
+    Каждая крышка -- один плоский четырёхугольник (2 треугольника),
+    лежащий ровно в плоскости соответствующего торца канала, с
+    нормалью, направленной НАРУЖУ (в сторону, противоположную
+    основному телу) -- как и полагается грани, "закрывающей" отверстие
+    порта снаружи.
+    """
+    ports = port_specs(p)
+    rects = cap_rects(p)
+    caps: Dict[str, vtk.vtkPolyData] = {}
+    for name, pts in rects.items():
+        spec = ports[name]
+        axis = spec["axis"]
+        sign = spec["sign"]
+        desired_normal = [0.0, 0.0, 0.0]
+        desired_normal[axis] = float(sign)
+        pd = _polygon_cell(pts, desired_normal=tuple(desired_normal))
+        tri = vtk.vtkTriangleFilter()
+        tri.SetInputData(pd)
+        tri.Update()
+        out = vtk.vtkPolyData()
+        out.DeepCopy(tri.GetOutput())
+        caps[name] = out
+    return caps
 
 
 def write_stl(polydata: vtk.vtkPolyData, filepath: str, binary: bool = True) -> None:
